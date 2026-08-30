@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>ESP32 Web BLE - SENSOR</title>
+    <title>ESP32 WebBLE3 - SENSOR</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="favicon.ico">
@@ -14,9 +14,9 @@
 <body>
 <!-- Navigation -->
 <div class="topnav">
-    <h1>ESP32 Web BLE - SENSOR - 08/30 13:48</h1>
+    <h1>ESP32 WebBLE3 - SENSOR - 08/30 13:48</h1>
 </div>
-<div class="content">L
+<div class="content">
     <!-- Connect/Disconnect buttons -->
     <div class="connection-card">
         <button id="connectBleButton" class="connectButton">&#x1F4F6;&nbsp; Connect to BLE device</button>
@@ -336,8 +336,9 @@ function drawObjTempChart(canvasId, color, yLabel) {
   
     var ambTempChart = drawAmbTempChart('ambTempChart', '#e07b3a', 'Temperature (°C)');
     var objTempChart = drawObjTempChart('objTempChart', '#e07b3a', 'Temperature (°C)');
+    var humChart = drawHumChart('humChart', '#7c5cbf', 'Humidity (%)');
     var Pm25Chart = drawPmChart('Pm25Chart', '#7c5cbf', 'PM2.5 (ug/m3)');
-    var humChart = drawHumChart('hum', '#7c5cbf', 'Humidity (%)');
+
 
 
     // Temperature unit toggle

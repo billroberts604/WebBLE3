@@ -14,7 +14,7 @@
 <body>
 <!-- Navigation -->
 <div class="topnav">
-    <h1>ESP32 Web BLE - SENSOR - 08/24 11:54</h1>
+    <h1>ESP32 Web BLE - SENSOR - 08/30 13:48</h1>
 </div>
 <div class="content">L
     <!-- Connect/Disconnect buttons -->
@@ -57,6 +57,15 @@
                 <span id="objTempValue">--</span><span class="sensor-unit" id="tempUnitLabel">&nbsp;&deg;C</span>
             </div>
             <div class="sensor-timestamp" id="objTempTimestamp">No reading</div>
+        </div>
+            
+        <div class="sensor-card hum">
+            <span class="sensor-icon">&#x1F321;</span>
+            <div class="sensor-label">hum</div>
+            <div class="sensor-value">
+                <span id="humValue">--</span><span class="sensor-unit" id="humUnitLabel">&nbsp;%</span>
+            </div>
+            <div class="sensor-timestamp" id="humTimestamp">No reading</div>
         </div>
       
         <div class="sensor-card PM2.5">
@@ -123,15 +132,18 @@
   
     const ambTempValueEl = document.getElementById('ambTempValue');
     const objTempValueEl = document.getElementById('objTempValue');
+    const humValueEl = document.getElementById('humValue');
     const MLXTempValueEl = document.getElementById('MLXTempValue');
     const Pm25ValueEl = document.getElementById('Pm25Value');
     const Pm10ValueEl = document.getElementById('Pm10Value');
     const ambTempTimestamp = document.getElementById('ambTempTimestamp');
     const objTempTimestamp = document.getElementById('objTempTimestamp');
+    const humTimestamp = document.getElementById('humTimestamp');
     const MLXTempTimestamp = document.getElementById('MLXTempTimestamp');
     const Pm25Timestamp = document.getElementById('Pm25Timestamp');
     const Pm10Timestamp = document.getElementById('Pm10Timestamp');
     const ambTempUnitLabel = document.getElementById('ambTempUnitLabel');
+    const humUnitLabel = document.getElementById('humUnitLabel');
     const objTempUnitLabel = document.getElementById('objTempUnitLabel');
     const MLXTempUnitLabel = document.getElementById('MLXTempUnitLabel');
 
@@ -141,6 +153,7 @@
     var ambTempCharUUID  = '00002a6e-0001-1000-8000-00805f9b34fb';
     var MLXTempCharUUID = '00002a6e-0002-1000-8000-00805f9b34fb';
     var objTempCharUUID  = '00002a6e-0003-1000-8000-00805f9b34fb';
+    var humCharUUID  = '00002a6e-0004-1000-8000-00805f9b34fb';
     var Pm25CharUUID = '00002a6e-0025-1000-8000-00805f9b34fb';
     var Pm10CharUUID = '00002a6e-0010-1000-8000-00805f9b34fb';
 
@@ -148,6 +161,7 @@
     var bleServer;
     var ambTempCharFound;
     var objTempCharFound;
+    var humCharFound;
     var MLXTempCharFound;
     var Pm25CharFound;
     var Pm10CharFound;
@@ -160,6 +174,7 @@
     var ambTempData = { labels: [], valuesC: [], valuesF: [] };
     var objTempData = { labels: [], valuesC: [], valuesF: [] };
     var MLXTempData = { labels: [], valuesC: [], valuesF: [] };
+    var humData = { labels: [], values: [] };
     var Pm25Data = { labels: [], values: [] };
     var Pm10Data = { labels: [], values: [] };
   
@@ -241,6 +256,45 @@ function drawObjTempChart(canvasId, color, yLabel) {
         });
     }
 
+  function drawHumChart(canvasId, color, yLabel) {
+        return new Chart(document.getElementById(canvasId), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: yLabel,
+                    borderColor: color,
+                    backgroundColor: color + '18',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    tension: 0.3,
+                    fill: true,
+                    data: []
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        ticks: { font: { size: 11 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 10 },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y: {
+                        title: { display: true, text: yLabel, font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                        suggestedMin: 0,
+                        suggestedMax: 50
+                    }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+  
   function drawPmChart(canvasId, color, yLabel) {
         return new Chart(document.getElementById(canvasId), {
             type: 'line',
@@ -283,6 +337,7 @@ function drawObjTempChart(canvasId, color, yLabel) {
     var ambTempChart = drawAmbTempChart('ambTempChart', '#e07b3a', 'Temperature (°C)');
     var objTempChart = drawObjTempChart('objTempChart', '#e07b3a', 'Temperature (°C)');
     var Pm25Chart = drawPmChart('Pm25Chart', '#7c5cbf', 'PM2.5 (ug/m3)');
+    var humChart = drawPmChart('hum', '#7c5cbf', 'Humidity (%)');
 
 
     // Temperature unit toggle
@@ -373,6 +428,18 @@ function drawObjTempChart(canvasId, color, yLabel) {
         chart.data.datasets[0].data = dataObj.values;
         chart.update('none');
     }
+
+    function pushHumPoint(dataObj, chart, label, value) {
+        dataObj.labels.push(label);
+        dataObj.values.push(value);
+        if (dataObj.labels.length > MAX_POINTS) {
+            dataObj.labels.shift();
+            dataObj.values.shift();
+        }
+        chart.data.labels = dataObj.labels;
+        chart.data.datasets[0].data = dataObj.values;
+        chart.update('none');
+    }
   
     // BLE UI helpers
     function showConnectButton() {
@@ -426,6 +493,7 @@ function drawObjTempChart(canvasId, color, yLabel) {
             await subscribeChar(service, Pm10CharUUID, handlePm10, v => { Pm10CharFound = v; });
             await subscribeChar(service, ambTempCharUUID, handleambTemp, v => { ambTempCharFound = v; });
             await subscribeChar(service, objTempCharUUID, handleobjTemp, v => { objTempCharFound = v; });
+            await subscribeChar(service, humCharUUID, handleobjTemp, v => { humCharFound = v; });
             await subscribeChar(service, MLXTempCharUUID, handleMLXTemp, v => { MLXTempCharFound = v; });
 
 
@@ -498,6 +566,14 @@ function drawObjTempChart(canvasId, color, yLabel) {
         pushTempPoint(objTempData, objTempChart, ts, valC, valF);
     }
 
+    function handlehum(event) {
+        var val = parseFloat(new TextDecoder().decode(event.target.value));
+        if (isNaN(val)) return;
+        humValueEl.textContent = val.toFixed(1);
+        var ts = getTime();
+        humTimestamp.textContent = 'Last reading: ' + ts;
+        pushPmPoint(humData, humChart, ts, parseFloat(val.toFixed(1)));
+      
     function handlePm25(event) {
         var val = parseFloat(new TextDecoder().decode(event.target.value));
         if (isNaN(val)) return;
@@ -532,6 +608,7 @@ function drawObjTempChart(canvasId, color, yLabel) {
         if (ambTempCharFound) stops.push(ambTempCharFound.stopNotifications().catch(() => {}));
         if (MLXTempCharFound) stops.push(MLXTempCharFound.stopNotifications().catch(() => {}));
         if (objTempCharFound) stops.push(objTempCharFound.stopNotifications().catch(() => {}));
+        if (humCharFound) stops.push(humCharFound.stopNotifications().catch(() => {}));
         if (Pm25CharFound) stops.push(Pm25CharFound.stopNotifications().catch(() => {}));
         if (Pm10CharFound) stops.push(Pm10CharFound.stopNotifications().catch(() => {}));
       

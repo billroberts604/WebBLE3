@@ -583,7 +583,7 @@ function drawObjTempChart(canvasId, color, yLabel) {
         var ts = getTime();
         humTimestamp.textContent = 'Last reading: ' + ts;
         pushPmPoint(humData, humChart, ts, parseFloat(val.toFixed(1)));
-      
+    }  
     function handlePm25(event) {
         var val = parseFloat(new TextDecoder().decode(event.target.value));
         if (isNaN(val)) return;

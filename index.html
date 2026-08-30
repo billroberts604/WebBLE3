@@ -1,0 +1,557 @@
+<!-- Rui Santos & Sara Santos - Random Nerd Tutorials
+  Complete project details at https://RandomNerdTutorials.com/esp32-web-ble-sensor-visualization/
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files. The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>ESP32 Web BLE - SENSOR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/png" href="favicon.ico">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<!-- Navigation -->
+<div class="topnav">
+    <h1>ESP32 Web BLE - SENSOR - 08/24 11:54</h1>
+</div>
+<div class="content">L
+    <!-- Connect/Disconnect buttons -->
+    <div class="connection-card">
+        <button id="connectBleButton" class="connectButton">&#x1F4F6;&nbsp; Connect to BLE device</button>
+        <button id="disconnectBleButton" class="disconnectButton hidden">&#x274C;&nbsp; Disconnect</button>
+        <div class="ble-status">
+            <span class="ble-dot" id="bleDot"></span>
+            <span id="bleState">Disconnected</span>
+        </div>
+    </div>
+    <!-- Sensor Reading Cards -->
+    <div class="sensor-grid">
+        <div class="sensor-card ambTemp">
+            <span class="sensor-icon">&#x1F321;</span>
+            <div class="sensor-label">Amb Temp</div>
+            <div class="sensor-value">
+                <span id="ambTempValue">--</span><span class="sensor-unit" id="tempUnitLabel">&nbsp;&deg;C</span>
+            </div>
+            <div class="sensor-timestamp" id="ambTempTimestamp">No reading</div>
+            <div class="unit-toggle">
+                <button class="unit-btn active" id="btnC" onclick="setTempUnit('C')">&deg;C</button>
+                <button class="unit-btn" id="btnF" onclick="setTempUnit('F')">&deg;F</button>
+            </div>
+        </div>
+
+        <div class="sensor-card MLXTemp">
+            <span class="sensor-icon">&#x1F321;</span>
+            <div class="sensor-label">MLX Temp</div>
+            <div class="sensor-value">
+                <span id="MLXTempValue">--</span><span class="sensor-unit" id="tempUnitLabel">&nbsp;&deg;C</span>
+            </div>
+            <div class="sensor-timestamp" id="MLXTempTimestamp">No reading</div>
+        </div>
+      
+        <div class="sensor-card objTemp">
+            <span class="sensor-icon">&#x1F321;</span>
+            <div class="sensor-label">Obj Temp</div>
+            <div class="sensor-value">
+                <span id="objTempValue">--</span><span class="sensor-unit" id="tempUnitLabel">&nbsp;&deg;C</span>
+            </div>
+            <div class="sensor-timestamp" id="objTempTimestamp">No reading</div>
+        </div>
+      
+        <div class="sensor-card PM2.5">
+            <span class="sensor-icon">&#8595;</span>
+            <div class="sensor-label">PM2.5</div>
+            <div class="sensor-value">
+                <span id="Pm25Value">--</span><span class="sensor-unit">&nbsp;ug/m3</span>
+            </div>
+            <div class="sensor-timestamp" id="Pm25Timestamp">No reading</div>
+        </div>
+      
+        <div class="sensor-card PM10">
+            <span class="sensor-icon">&#8595;</span>
+            <div class="sensor-label">PM10</div>
+            <div class="sensor-value">
+                <span id="Pm10Value">--</span><span class="sensor-unit">&nbsp;ug/m3</span>
+            </div>
+            <div class="sensor-timestamp" id="Pm10Timestamp">No reading</div>
+        </div>
+    </div>
+  
+    <!-- Charts -->
+    <div class="charts-section">
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <h2>&#x1F321;&nbsp; Amb Temperature</h2>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="ambTempChart" role="img"></canvas>
+            </div>
+        </div>
+      
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <h2>&#x1F321;&nbsp; Obj Temperature</h2>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="objTempChart" role="img"></canvas>
+            </div>
+        </div>
+       
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <h2>&#8595;&nbsp; PM2.5</h2>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="Pm25Chart" role="img"></canvas>
+            </div>
+        </div> 
+      
+    </div>
+</div>
+  
+<div class="footer">
+    <p><a href= »</a></p>
+</div>
+  
+<script>
+    // DOM Elements
+    const connectButton = document.getElementById('connectBleButton');
+    const disconnectButton = document.getElementById('disconnectBleButton');
+    const bleStateEl = document.getElementById('bleState');
+    const bleDot = document.getElementById('bleDot');
+  
+    const ambTempValueEl = document.getElementById('ambTempValue');
+    const objTempValueEl = document.getElementById('objTempValue');
+    const MLXTempValueEl = document.getElementById('MLXTempValue');
+    const Pm25ValueEl = document.getElementById('Pm25Value');
+    const Pm10ValueEl = document.getElementById('Pm10Value');
+    const ambTempTimestamp = document.getElementById('ambTempTimestamp');
+    const objTempTimestamp = document.getElementById('objTempTimestamp');
+    const MLXTempTimestamp = document.getElementById('MLXTempTimestamp');
+    const Pm25Timestamp = document.getElementById('Pm25Timestamp');
+    const Pm10Timestamp = document.getElementById('Pm10Timestamp');
+    const ambTempUnitLabel = document.getElementById('ambTempUnitLabel');
+    const objTempUnitLabel = document.getElementById('objTempUnitLabel');
+    const MLXTempUnitLabel = document.getElementById('MLXTempUnitLabel');
+
+    // BLE UUIDs  changed to match old version on ESP32
+    var deviceName    = 'ESP32';
+    var bleService    = '0000181a-0000-1000-8000-00805f9b34fb';
+    var ambTempCharUUID  = '00002a6e-0001-1000-8000-00805f9b34fb';
+    var MLXTempCharUUID = '00002a6e-0002-1000-8000-00805f9b34fb';
+    var objTempCharUUID  = '00002a6e-0003-1000-8000-00805f9b34fb';
+    var Pm25CharUUID = '00002a6e-0025-1000-8000-00805f9b34fb';
+    var Pm10CharUUID = '00002a6e-0010-1000-8000-00805f9b34fb';
+
+    // BLE state
+    var bleServer;
+    var ambTempCharFound;
+    var objTempCharFound;
+    var MLXTempCharFound;
+    var Pm25CharFound;
+    var Pm10CharFound;
+    var userDisconnected = false;
+
+    // Sensor state
+    var currentUnit = 'C';
+    var lastTempC = null;
+    const MAX_POINTS = 60;
+    var ambTempData = { labels: [], valuesC: [], valuesF: [] };
+    var objTempData = { labels: [], valuesC: [], valuesF: [] };
+    var MLXTempData = { labels: [], valuesC: [], valuesF: [] };
+    var Pm25Data = { labels: [], values: [] };
+    var Pm10Data = { labels: [], values: [] };
+  
+    // Charts
+    function drawAmbTempChart(canvasId, color, yLabel) {
+        return new Chart(document.getElementById(canvasId), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: yLabel,
+                    borderColor: color,
+                    backgroundColor: color + '18',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    tension: 0.3,
+                    fill: true,
+                    data: []
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        ticks: { font: { size: 11 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 10 },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y: {
+                        title: { display: true, text: yLabel, font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                        suggestedMin: 15,
+                        suggestedMax: 45
+                    }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+function drawObjTempChart(canvasId, color, yLabel) {
+        return new Chart(document.getElementById(canvasId), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: yLabel,
+                    borderColor: color,
+                    backgroundColor: color + '18',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    tension: 0.3,
+                    fill: true,
+                    data: []
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        ticks: { font: { size: 11 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 10 },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y: {
+                        title: { display: true, text: yLabel, font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                        suggestedMin: -15,
+                        suggestedMax: 0
+                    }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+  function drawPmChart(canvasId, color, yLabel) {
+        return new Chart(document.getElementById(canvasId), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: yLabel,
+                    borderColor: color,
+                    backgroundColor: color + '18',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    tension: 0.3,
+                    fill: true,
+                    data: []
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        ticks: { font: { size: 11 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 10 },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y: {
+                        title: { display: true, text: yLabel, font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                        suggestedMin: 0,
+                        suggestedMax: 50
+                    }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+  
+    var ambTempChart = drawAmbTempChart('ambTempChart', '#e07b3a', 'Temperature (°C)');
+    var objTempChart = drawObjTempChart('objTempChart', '#e07b3a', 'Temperature (°C)');
+    var Pm25Chart = drawPmChart('Pm25Chart', '#7c5cbf', 'PM2.5 (ug/m3)');
+
+
+    // Temperature unit toggle
+    function setTempUnit(unit) {
+        currentUnit = unit;
+        document.getElementById('btnC').classList.toggle('active', unit === 'C');
+        document.getElementById('btnF').classList.toggle('active', unit === 'F');
+        ambTempUnitLabel.innerHTML = '&nbsp;&deg;' + unit;
+        refreshTempDisplay();
+        refreshTempChart();
+    }
+
+    function cToF(c) {
+        return (c * 9 / 5 + 32).toFixed(1);
+    }
+
+    function refreshAmbTempDisplay() {
+        if (lastTempC === null) return;
+        ambTempValueEl.textContent = currentUnit === 'C'
+            ? parseFloat(lastTempC).toFixed(1)
+            : cToF(parseFloat(lastTempC));
+    }
+
+    function refreshMLXTempDisplay() {
+        if (lastTempC === null) return;
+        MLXTempValueEl.textContent = currentUnit === 'C'
+            ? parseFloat(lastTempC).toFixed(1)
+            : cToF(parseFloat(lastTempC));
+    }
+
+      function refreshObjTempDisplay() {
+        if (lastTempC === null) return;
+        objTempValueEl.textContent = currentUnit === 'C'
+            ? parseFloat(lastTempC).toFixed(1)
+            : cToF(parseFloat(lastTempC));
+    }
+    function refreshAmbTempChart() {
+        ambTempChart.data.labels = ambTempData.labels;
+        ambTempChart.data.datasets[0].data = currentUnit === 'C' ? ambTempData.valuesC : ambTempData.valuesF;
+        ambTempChart.data.datasets[0].label = currentUnit === 'C' ? 'Temperature (°C)' : 'Temperature (°F)';
+        ambTempChart.options.scales.y.title.text = currentUnit === 'C' ? 'Temperature (°C)' : 'Temperature (°F)';
+        ambTempChart.update();
+    }
+
+  
+    function refreshObjTempChart() {
+        objTempChart.data.labels = objTempData.labels;
+        objTempChart.data.datasets[0].data = currentUnit === 'C' ? objTempData.valuesC : objTempData.valuesF;
+        objTempChart.data.datasets[0].label = currentUnit === 'C' ? 'Temperature (°C)' : 'Temperature (°F)';
+        objTempChart.options.scales.y.title.text = currentUnit === 'C' ? 'Temperature (°C)' : 'Temperature (°F)';
+        objTempChart.update();
+    }
+  
+    function pushTempPoint(dataObj, chart, label, value, extraValue = null) {
+        dataObj.labels.push(label);
+        if (extraValue !== null) {
+            dataObj.valuesC.push(value);
+            dataObj.valuesF.push(extraValue);
+        } else {
+            dataObj.values.push(value);
+        }
+        if (dataObj.labels.length > MAX_POINTS) {
+            dataObj.labels.shift();
+            if (extraValue !== null) {
+                dataObj.valuesC.shift();
+                dataObj.valuesF.shift();
+            } else {
+                dataObj.values.shift();
+            }
+        }
+        chart.data.labels = dataObj.labels;
+        if (extraValue !== null) {
+            chart.data.datasets[0].data = currentUnit === 'C' ? dataObj.valuesC : dataObj.valuesF;
+        } else {
+            chart.data.datasets[0].data = dataObj.values;
+        }
+        chart.update('none');
+    }
+
+  function pushPmPoint(dataObj, chart, label, value) {
+        dataObj.labels.push(label);
+        dataObj.values.push(value);
+        if (dataObj.labels.length > MAX_POINTS) {
+            dataObj.labels.shift();
+            dataObj.values.shift();
+        }
+        chart.data.labels = dataObj.labels;
+        chart.data.datasets[0].data = dataObj.values;
+        chart.update('none');
+    }
+  
+    // BLE UI helpers
+    function showConnectButton() {
+        connectButton.classList.remove('hidden');
+        disconnectButton.classList.add('hidden');
+    }
+
+    function showDisconnectButton() {
+        connectButton.classList.add('hidden');
+        disconnectButton.classList.remove('hidden');
+    }
+
+    function setBleConnected(deviceName) {
+        bleStateEl.textContent = 'Connected to ' + deviceName;
+        bleDot.className = 'ble-dot connected';
+        showDisconnectButton();
+    }
+
+    function setBleDisconnected(msg) {
+        bleStateEl.textContent = msg || 'Disconnected';
+        bleDot.className = 'ble-dot';
+        showConnectButton();
+    }
+
+    function isWebBluetoothEnabled() {
+        if (!navigator.bluetooth) {
+            setBleDisconnected('Web Bluetooth not available in this browser');
+            return false;
+        }
+        return true;
+    }
+
+    // Connect BLE handler
+    async function connectToDevice() {
+        userDisconnected = false;
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ name: deviceName }],
+                optionalServices: [bleService]
+            });
+
+            device.addEventListener('gattserverdisconnected', onDisconnected);
+            const gattServer = await device.gatt.connect();
+            
+            bleServer = gattServer;
+            setBleConnected(gattServer.device.name);
+
+            const service = await gattServer.getPrimaryService(bleService);
+            
+            await subscribeChar(service, Pm25CharUUID, handlePm25, v => { Pm25CharFound = v; });
+            await subscribeChar(service, Pm10CharUUID, handlePm10, v => { Pm10CharFound = v; });
+            await subscribeChar(service, ambTempCharUUID, handleambTemp, v => { ambTempCharFound = v; });
+            await subscribeChar(service, objTempCharUUID, handleobjTemp, v => { objTempCharFound = v; });
+            await subscribeChar(service, MLXTempCharUUID, handleMLXTemp, v => { MLXTempCharFound = v; });
+
+
+
+        } catch (err) {
+            console.error('Connection error:', err);
+            setBleDisconnected('Connection failed: ' + err.message);
+        }
+    }
+
+    async function subscribeChar(service, uuid, handler, storeFn) {
+        try {
+            const char = await service.getCharacteristic(uuid);
+            console.log("uuid: ", char.uuid);
+            console.log("properties: ", char.properties);
+            storeFn(char);
+           
+            char.addEventListener('characteristicvaluechanged', handler);
+            console.log('await StartNotifications');
+            await char.startNotifications();
+            console.log("started");
+            
+            try {
+                const val = await char.readValue();
+                await new Promise(resolve => setTimeout(resolve, 50));
+                handler({ target: { value: val } });
+            } catch (readErr) {
+                console.warn('Initial read failed for', uuid, ':', readErr);
+            }
+            
+            console.log(`Subscribed to ${uuid}`);
+            return char;
+        } catch (err) {
+            console.warn('Could not subscribe to', uuid, ':', err);
+            throw err;
+        }
+    }
+
+    // Characteristic handlers
+    function handleambTemp(event) {
+        var val = parseFloat(new TextDecoder().decode(event.target.value));
+        if (isNaN(val)) return;
+        lastTempC = val;
+        refreshAmbTempDisplay();
+        var ts = getTime();
+        ambTempTimestamp.textContent = 'Last reading: ' + ts;
+        const valC = parseFloat(val.toFixed(1));
+        const valF = parseFloat(cToF(val));
+        pushTempPoint(ambTempData, ambTempChart, ts, valC, valF);
+    }
+    function handleMLXTemp(event) {
+        var val = parseFloat(new TextDecoder().decode(event.target.value));
+        if (isNaN(val)) return;
+        lastTempC = val;
+        refreshMLXTempDisplay();
+        var ts = getTime();
+        MLXTempTimestamp.textContent = 'Last reading: ' + ts;
+        const valC = parseFloat(val.toFixed(1));
+        const valF = parseFloat(cToF(val));
+    }
+    function handleobjTemp(event) {
+        var val = parseFloat(new TextDecoder().decode(event.target.value));
+        if (isNaN(val)) return;
+        lastTempC = val;
+        refreshObjTempDisplay();
+        var ts = getTime();
+        objTempTimestamp.textContent = 'Last reading: ' + ts;
+        const valC = parseFloat(val.toFixed(1));
+        const valF = parseFloat(cToF(val));
+        pushTempPoint(objTempData, objTempChart, ts, valC, valF);
+    }
+
+    function handlePm25(event) {
+        var val = parseFloat(new TextDecoder().decode(event.target.value));
+        if (isNaN(val)) return;
+        Pm25ValueEl.textContent = val.toFixed(1);
+        var ts = getTime();
+        Pm25Timestamp.textContent = 'Last reading: ' + ts;
+        pushPmPoint(Pm25Data, Pm25Chart, ts, parseFloat(val.toFixed(1)));
+    }
+
+    function handlePm10(event) {
+        var val = parseFloat(new TextDecoder().decode(event.target.value));
+        if (isNaN(val)) return;
+        Pm10ValueEl.textContent = val.toFixed(1);
+        var ts = getTime();
+        Pm10Timestamp.textContent = 'Last reading: ' + ts;
+    }
+
+    // Disconnect handlers
+    function onDisconnected(event) {
+        if (!userDisconnected) {
+            setBleDisconnected('Device disconnected unexpectedly');
+        }
+    }
+
+    function disconnectDevice() {
+        if (!bleServer || !bleServer.connected) {
+            alert('Bluetooth is not connected.');
+            return;
+        }
+        userDisconnected = true;
+        const stops = [];
+        if (ambTempCharFound) stops.push(ambTempCharFound.stopNotifications().catch(() => {}));
+        if (MLXTempCharFound) stops.push(MLXTempCharFound.stopNotifications().catch(() => {}));
+        if (objTempCharFound) stops.push(objTempCharFound.stopNotifications().catch(() => {}));
+        if (Pm25CharFound) stops.push(Pm25CharFound.stopNotifications().catch(() => {}));
+        if (Pm10CharFound) stops.push(Pm10CharFound.stopNotifications().catch(() => {}));
+      
+        Promise.all(stops)
+            .then(() => bleServer.disconnect())
+            .then(() => setBleDisconnected('Disconnected'))
+            .catch(err => console.error('Disconnect error:', err));
+    }
+
+    function getTime() {
+        var d = new Date();
+        var p = n => ('00' + n).slice(-2);
+        return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+
+    // Button listeners
+    connectButton.addEventListener('click', () => {
+        if (isWebBluetoothEnabled()) connectToDevice();
+    });
+    disconnectButton.addEventListener('click', disconnectDevice);
+</script>
+</body>
+</html>

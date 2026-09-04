@@ -14,7 +14,7 @@
 <body>
 <!-- Navigation -->
 <div class="topnav">
-    <h1>ESP32 WebBLE3 - SENSOR - 08/30 15:55</h1>
+    <h1>ESP32 WebBLE3 - SENSOR - 09/04 15:35</h1>
 </div>
 <div class="content">
     <!-- Connect/Disconnect buttons -->
@@ -601,10 +601,11 @@ function drawObjTempChart(canvasId, color, yLabel) {
         Pm10Timestamp.textContent = 'Last reading: ' + ts;
     }
 
-    // Disconnect handlers
+    // Disconnect handlers. Try to reconnect once if unexpected.
     function onDisconnected(event) {
         if (!userDisconnected) {
-            setBleDisconnected('Device disconnected unexpectedly');
+           setBleDisconnected('Device disconnected unexpectedly. Try to reconnect.');
+           if (isWebBluetoothEnabled()) connectToDevice();
         }
     }
 
